@@ -1,0 +1,72 @@
+import yt_dlp
+import whisper
+from googletrans import Translator
+import subprocess
+import os
+
+# Download audio from YouTube
+def download_audio(url, save_path='.'):
+    try:
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': f'{save_path}/downloaded_audio.%(ext)s',
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info_dict)
+            print(f"Downloaded: {filename}")
+            return filename  # This might be .webm, .m4a, etc.
+    except Exception as e:
+        print(f"Download error: {e}")
+        return None
+
+# Convert .webm or other to .wav
+def convert_to_wav(input_path, output_path='converted_audio.wav'):
+    try:
+        # Running ffmpeg to convert the downloaded file to a .wav file
+        subprocess.run(['ffmpeg', '-i', input_path, '-ac', '1', '-ar', '16000', output_path], check=True)
+        print(f"Converted to: {output_path}")
+        return output_path
+    except subprocess.CalledProcessError as e:
+        print(f"Conversion failed: {e}")
+        return None
+
+# Transcribe audio using Whisper
+def transcribe_audio(audio_path):
+    model = whisper.load_model("base")
+    result = model.transcribe(audio_path)
+    print(f"\nTranscription:\n{result['text']}")
+    return result['text']
+
+# Translate transcript using Google Translate
+def translate_text(text, target_lang='es'):
+    translator = Translator()
+    translation = translator.translate(text, dest=target_lang)
+    print(f"\nTranslated ({target_lang}):\n{translation.text}")
+    return translation.text
+
+# Main workflow
+if __name__ == "__main__":
+    # Check if the audio is already downloaded
+    audio_file = 'downloaded_audio.mp4'  # Name of the downloaded audio file
+
+    if not os.path.exists(audio_file):
+        video_url = input("Enter YouTube video URL: ")
+        audio_file = download_audio(video_url)  # Download only if it doesn't exist
+
+    if audio_file:
+        wav_file = convert_to_wav(audio_file)  # Convert the downloaded audio to wav
+        if wav_file:
+            transcript = transcribe_audio(wav_file)  # Transcribe the wav file
+
+            # Take user input for the target translation language
+            target_lang = input("Enter the target language for translation (e.g., hi for Hindi, es for Spanish): ").strip()
+
+            translated = translate_text(transcript, target_lang)  # Translate to the language entered by the user
+
+            # Save the transcript and translation to a file
+            with open("output_transcript.txt", "w", encoding="utf-8") as f:
+                f.write("Original Transcript:\n")
+                f.write(transcript + "\n\n")
+                f.write("Translated Transcript:\n")
+                f.write(translated)
